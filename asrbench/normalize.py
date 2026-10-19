@@ -34,19 +34,6 @@ VARIANT_RAW = "raw"
 VARIANT_NORM = "norm"
 VARIANTS = (VARIANT_RAW, VARIANT_NORM)
 
-#: Human-readable rule summary, rendered into docs/normalization_rules.md.
-RULES: dict[str, str] = {
-    "raw": "identity - reference and hypothesis are scored as published",
-    "en": "NFKC, lower-case, contractions/abbreviations expanded, spelled-out numbers mapped to "
-          "digits, brackets turned into commas (their content is spoken), punctuation/symbols "
-          "dropped, whitespace collapsed (openai-whisper EnglishTextNormalizer)",
-    "hi": "NFKC, drop zero-width joiners, lower-case, symbols and punctuation -> space, combining "
-          "marks (matras) preserved, Devanagari digits -> ASCII, whitespace collapsed",
-    "ko": "NFKC (full-width digits/punctuation -> ASCII), drop zero-width joiners, lower-case, "
-          "symbols and punctuation -> space, whitespace collapsed",
-}
-
-
 #: Parentheses/brackets become commas so the English normaliser keeps the words inside them.
 _BRACKET_CHARS = str.maketrans({c: ", " for c in "()[]"})
 _DEVA_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
