@@ -28,7 +28,11 @@ Measured on this subset (corpus WER, 22 of 150 references contain brackets):
 | ko | Whisper | 16.77% | 14.95% | −1.83 pp |
 | ko | Qwen3-ASR | 12.29% | 10.32% | −1.97 pp |
 
-So neither policy is neutral: deleting brackets costs both models ~2 pp on English and Hindi
+![keep vs delete bracketed text](img/fig_bracket_policy.png)
+
+Same numbers as the table, per model (`scripts/make_figures.py` recomputes them from
+`outputs/predictions_*.jsonl`). So neither policy is neutral: deleting brackets costs both models
+~2 pp on English and Hindi
 (consistent with those asides being read aloud — the models transcribe them), while keeping them
 costs ~2 pp on Korean (consistent with those asides being written glosses the models do not say).
 No listening audit was performed, so that reading of the data is an interpretation; the measured

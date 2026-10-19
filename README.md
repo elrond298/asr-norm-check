@@ -14,6 +14,9 @@ viewer for the results.
 
 ![WER and CER per language](docs/img/fig_wer_cer.png)
 
+*Figure 1 — same 150 clips, one scoring rule. English is a near-tie (4.7 vs 3.7 WER); Hindi is the
+wide gap (24.1 vs 11.2); Korean sits between (16.8 vs 12.3).*
+
 Qwen3-ASR wins every language, by ~1 pp on English and by 13 pp on Hindi. Roughly half of
 Whisper's score is formatting rather than recognition (raw → normalised: 21.89% → 15.33%), and the
 gap survives that correction (−7.05 pp raw, −6.57 pp normalised). Details, caveats and the
@@ -74,9 +77,10 @@ After normalisation (`norm` variant):
 
 ![WER before and after normalisation](docs/img/fig_normalisation.png)
 
-Each line is one model on one language: the left end is the score as produced, the right end after
-the text clean-up. The length of the line is how much of that model's apparent error rate was
-formatting.
+*Figure 2 — each line is one model on one language: left end as produced, right end after text
+clean-up. The length of a line is how much of that model's apparent error rate was formatting, not
+recognition. Whisper's English loses 7.3 pp this way, Qwen3-ASR's Hindi 7.6 pp; Korean changes
+least (2.5 and 1.9 pp).*
 
 **What survives normalisation:** the Qwen3-ASR − Whisper WER gap is −7.05 pp raw and −6.57 pp
 normalised (from unrounded rates — the rounded table subtracts to 6.56, which is also correct
@@ -89,6 +93,8 @@ hides the shape. Share of clips below each error rate (higher curve = better mod
 
 ![per-clip WER distribution](docs/img/fig_distribution.png)
 
+*Figure 3 — share of clips at or below each error rate; dots mark medians.*
+
 The same picture in numbers: 37 of 150 clips are perfect for both models; 52 are perfect for
 Qwen3-ASR, 41 for Whisper. Medians (Whisper → Qwen3-ASR): English 2.9% → 0.0%, Hindi 26.1% → 9.1%,
 Korean 13.3% → 9.2%. Hindi separates across the whole distribution (Whisper has **no** perfect clip
@@ -99,6 +105,9 @@ has exceptions, which is why the per-clip files are committed alongside the aver
 
 ![error composition](docs/img/fig_error_mix.png)
 
+*Figure 4 — how each model's edits split into substitutions, deletions and insertions
+(percentages inside the bars).*
+
 Numbers inside the bars are percentages of that model's edits. Substitutions are everywhere; Korean
 is the outlier with ~40% deletions, which is the eojeol spacing effect below.
 
@@ -107,8 +116,8 @@ is the outlier with ~40% deletions, which is the eojeol spacing effect below.
    some read aloud (`…can climb (though not well), swim…`) and some only written
    (`80 km (50 mi)`). The stock English normaliser deletes them; measuring both policies on this
    subset shows deleting costs both models 1.7–2.1 pp WER on English and Hindi but *saves*
-   1.8–2.0 pp on Korean (table in `docs/normalization_rules.md`). This repo keeps the text, so a
-   model is charged for what it says, and reports the ~2 pp Korean cost.
+   1.8–2.0 pp on Korean (Figure 5). This repo keeps the text, so a model is charged for what it
+   says, and reports the ~2 pp Korean cost.
 2. **On Hindi and Korean, WER measures spelling policy as much as listening.** Where a word breaks
    (Hindi compounds) and where a space goes (Korean *eojeol* — the spacing-defined word block),
    plus the *nukta* dot that changes a Devanagari consonant, move WER by whole words. CER is
@@ -116,6 +125,12 @@ is the outlier with ~40% deletions, which is the eojeol spacing effect below.
 3. **A rule set can be one-sided.** English folds spoken numbers to digits; Korean does not, so
    Whisper saying `백오십` where the reference has `150` is charged (case 16 in
    `docs/error_analysis.md`).
+
+![keep vs delete bracketed text](docs/img/fig_bracket_policy.png)
+
+*Figure 5 — finding 1 in one picture: the same predictions scored with bracketed text kept (blue,
+what the tables use) or deleted. Bars are corpus WER %; the counts under the axis are how many
+references per language contain brackets.*
 
 No uncertainty analysis was run (no bootstrap, no repeated decoding), so treat this as 150 point
 estimates, not as a ranking with error bars: the English gap of about 1 pp is well inside what

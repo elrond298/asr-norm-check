@@ -19,7 +19,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from asrbench.common import OUT_DIR, ROOT  # noqa: E402
+import re  # noqa: E402
+
+from asrbench.common import MANIFEST, OUT_DIR, ROOT, load_jsonl  # noqa: E402
+from asrbench.normalize import normalize  # noqa: E402
+from asrbench.scoring import per_sample  # noqa: E402
 
 FIG_DIR = ROOT / "docs" / "img"
 LANGS = ["en", "hi", "ko"]
@@ -27,6 +31,7 @@ LANG_LABEL = {"en": "English", "hi": "Hindi", "ko": "Korean", "all": "all 150"}
 MODELS = ["whisper", "qwen3-asr"]
 MODEL_LABEL = {"whisper": "Whisper large-v3", "qwen3-asr": "Qwen3-ASR 1.7B"}
 COLOR = {"whisper": "#4c78a8", "qwen3-asr": "#e45756"}
+PREDICTION_FILE = {"whisper": "predictions_whisper.jsonl", "qwen3-asr": "predictions_qwen.jsonl"}
 SURFACE = "#fcfcfb"
 TEXT = "#222"
 
@@ -167,6 +172,61 @@ def fig_distribution(per: pd.DataFrame) -> Path:
     return out
 
 
+_BRACKETED = re.compile(r"[<\[][^>\]]*[>\]]|\([^)]*?\)")
+
+
+def _corpus_wer(policy: str, language: str, model: str) -> tuple[float, int]:
+    """Corpus WER under one bracket policy; 'delete' drops bracketed spans before normalising."""
+    rows = [r for r in load_jsonl(OUT_DIR / PREDICTION_FILE[model]) if r["language"] == language]
+    errors = tokens = 0
+    for row in rows:
+        ref, hyp = row["reference"], row["model_output"]
+        if policy == "delete":
+            ref, hyp = _BRACKETED.sub(" ", ref), _BRACKETED.sub(" ", hyp)
+        detail = per_sample(normalize(ref, language), normalize(hyp, language))
+        errors += detail["substitutions"] + detail["deletions"] + detail["insertions"]
+        tokens += detail["ref_tokens"]
+    bracketed = sum(1 for r in load_jsonl(MANIFEST)
+                    if r["language"] == language and _BRACKETED.search(r["reference"]))
+    return 100 * errors / tokens, bracketed
+
+
+def fig_bracket_policy() -> Path:
+    """The keep-vs-delete bracketed-text experiment, per language and model."""
+    labels, kept, deleted, counts = [], [], [], {}
+    for lang in LANGS:
+        for model in MODELS:
+            k, bracketed = _corpus_wer("keep", lang, model)
+            d, _ = _corpus_wer("delete", lang, model)
+            counts[lang] = bracketed
+            labels.append(f"{LANG_LABEL[lang]}\n{MODEL_LABEL[model].split()[0]}")
+            kept.append(k)
+            deleted.append(d)
+    fig, ax = plt.subplots(figsize=(8.2, 3.6))
+    x = range(len(labels))
+    width = 0.36
+    b1 = ax.bar([i - width / 2 for i in x], kept, width, label="brackets kept (used here)",
+                color="#4c78a8")
+    b2 = ax.bar([i + width / 2 for i in x], deleted, width, label="brackets deleted",
+                color="#b0b0b0")
+    ax.bar_label(b1, fmt="%.1f", padding=2, fontsize=8)
+    ax.bar_label(b2, fmt="%.1f", padding=2, fontsize=8)
+    ax.set_xticks(list(x), labels, fontsize=8.5)
+    ax.set_ylabel("corpus WER %")
+    ax.set_ylim(0, 33)
+    footnote = " · ".join(f"{LANG_LABEL[l]} {counts[l]}/50 refs contain brackets" for l in LANGS)
+    ax.set_title("Deleting bracketed text helps Korean and hurts English/Hindi", fontsize=10, loc="left")
+    ax.text(0, -0.30, footnote, transform=ax.transAxes, fontsize=7.5, color="#666")
+    ax.legend(frameon=False, fontsize=8.5, ncols=2, loc="upper center", bbox_to_anchor=(0.5, -0.16))
+    ax.grid(axis="y", color="#e4e4e4", linewidth=0.8)
+    ax.set_axisbelow(True)
+    fig.tight_layout()
+    out = FIG_DIR / "fig_bracket_policy.png"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
 def fig_error_mix(metrics: pd.DataFrame) -> Path:
     """Stacked bars: what kind of error, per language (normalised counts)."""
     norm = metrics[(metrics["variant"] == "norm") & (metrics["language"] != "all")]
@@ -206,7 +266,7 @@ def main() -> None:
     FIG_DIR.mkdir(parents=True, exist_ok=True)
     metrics, per = load()
     for path in (fig_wer_cer(metrics), fig_normalisation(metrics), fig_distribution(per),
-                 fig_error_mix(metrics)):
+                 fig_error_mix(metrics), fig_bracket_policy()):
         print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB)")
 
 

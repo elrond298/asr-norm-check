@@ -45,6 +45,8 @@ Corpus WER / CER, `raw` → `norm`:
 | qwen3-asr | hi | 18.84% | 11.19% | −7.65 | 6.38% | 4.54% | −1.84 |
 | qwen3-asr | ko | 14.17% | 12.29% | −1.88 | 6.32% | 4.20% | −2.12 |
 
+![WER before and after normalisation](img/fig_normalisation.png)
+
 The Qwen3-ASR − Whisper gap in WER moves from **−7.05 pp (raw) to −6.57 pp (norm)** across all 150
 clips (from unrounded rates; the rounded table in the README subtracts to 6.56). So the observed gap is *not* mostly formatting: normalisation removes 1.9–8.3 WER points
 from each model (7–8 on English and Hindi, ~2 on Korean) and leaves the ranking, and roughly the
