@@ -44,7 +44,10 @@ def per_sample(ref: str, hyp: str) -> dict:
     n_ref = len(ref.split())
     errors = counts["substitutions"] + counts["deletions"] + counts["insertions"]
     ref_chars = without_spaces(ref)
-    char_errors = jiwer.levenshtein_distance(ref_chars, without_spaces(hyp)) if ref_chars else 0
+    char_errors = 0
+    if ref_chars:
+        chars = jiwer.process_characters(ref_chars, without_spaces(hyp))
+        char_errors = chars.substitutions + chars.deletions + chars.insertions
     return {
         **counts,
         "ref_tokens": n_ref,

@@ -64,7 +64,8 @@ def diff_html(ref: str, hyp: str) -> str:
             hyp_parts.append(f'<span style="{_STYLES["ins"]}">{hyp_chunk}</span>')
 
     def block(title: str, parts: list[str]) -> str:
-        return f"<div style='margin:2px 0'><b>{title}</b> {''.join(parts) or '<i>(empty)</i>'}</div>"
+        # join with spaces: adjacent chunks must not glue together ("and" + highlighted word)
+        return f"<div style='margin:2px 0'><b>{title}</b> {' '.join(parts) or '<i>(empty)</i>'}</div>"
 
     return block("reference&nbsp;", ref_parts) + block("hypothesis", hyp_parts)
 
@@ -139,7 +140,7 @@ def build() -> gr.Blocks:
             "metric for Hindi/Korean). *raw* scores the strings as produced; *norm* applies the "
             "language-specific normalisation in `docs/normalization_rules.md`."
         )
-        variant = gr.Radio(["norm", "raw"], value="norm", label="Scoring variant", inline=True)
+        variant = gr.Radio(["norm", "raw"], value="norm", label="Scoring variant")
 
         with gr.Tab("Metrics"):
             comparison = gr.Dataframe(value=metrics_table("norm"), label="Per-language results",
@@ -154,7 +155,7 @@ def build() -> gr.Blocks:
             variant.change(metrics_table, inputs=variant, outputs=comparison)
 
         with gr.Tab("Samples"):
-            language = gr.Radio(LANGUAGES, value="en", label="Language", inline=True)
+            language = gr.Radio(LANGUAGES, value="en", label="Language")
             en_choices = [c for c in choices if MANIFEST[LABELS[c]]["language"] == "en"]
             picker = gr.Dropdown(choices=en_choices, value=en_choices[0] if en_choices else None,
                                  label="Sample", filterable=True)

@@ -1,0 +1,9 @@
+model,language,variant,n,wer,cer,substitutions,deletions,insertions,ref_tokens,ref_chars,char_errors
+whisper,en,norm,50,0.047195,0.023019,39,6,8,1123,5300,122
+whisper,hi,norm,50,0.240876,0.087638,262,9,26,1233,4975,436
+whisper,ko,norm,50,0.167734,0.048367,68,55,8,781,2357,114
+whisper,all,norm,150,0.153331,0.053198,369,70,42,3137,12632,672
+qwen3-asr,en,norm,50,0.036509,0.015283,25,6,10,1123,5300,81
+qwen3-asr,hi,norm,50,0.111922,0.045427,111,15,12,1233,4975,226
+qwen3-asr,ko,norm,50,0.122919,0.042003,50,38,8,781,2357,99
+qwen3-asr,all,norm,150,0.087663,0.032141,186,59,30,3137,12632,406

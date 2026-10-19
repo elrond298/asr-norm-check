@@ -5,24 +5,29 @@ Two variants are scored everywhere:
 raw   -- the strings exactly as FLEURS / the model produced them.
 norm  -- language-aware normalisation (see docs/normalization_rules.md).
 
-For all three languages ``norm`` reuses the normalisers from the official
-``openai-whisper`` package (``EnglishTextNormalizer`` for English,
-``BasicTextNormalizer`` for Hindi/Korean). They are the de-facto reference for
-ASR scoring: NFKC, lower-casing, punctuation/symbol removal, whitespace
-collapse, and for English number/ordinal/contraction expansion.
+English reuses openai-whisper's ``EnglishTextNormalizer`` (the de-facto ASR scoring
+reference: lower-case, contractions/abbreviations expanded, spelled-out numbers mapped to
+digits, punctuation and symbols dropped, whitespace collapsed).
 
-Hindi additionally drops zero-width joiners, which Devanagari text in FLEURS
-and in model output use inconsistently.
+Bracketed text is kept in all three languages: FLEURS uses parentheses for asides that the
+speaker actually reads ("... can climb (though not well), swim ..."), so deleting them would
+book every correctly transcribed aside as an insertion. openai-whisper's English normaliser
+deletes parenthesised spans, so for English the brackets are turned into commas first.
+
+Hindi and Korean use the same idea but with a cleaner that keeps combining marks.
+openai-whisper's ``BasicTextNormalizer`` folds every Unicode M/S/P character into a space,
+which shreds Devanagari: matras (category Mn/Mc) and the virama carry the vowels and would
+disappear, turning one word into a string of bare consonants. So for those languages we only
+space out symbols and punctuation, and keep the marks.
 """
 
 from __future__ import annotations
 
 import unicodedata
 
-from whisper.normalizers import BasicTextNormalizer, EnglishTextNormalizer
+from whisper.normalizers import EnglishTextNormalizer
 
 _EN = EnglishTextNormalizer()
-_BASIC = BasicTextNormalizer()
 _ZW = dict.fromkeys(map(ord, "\u200b\u200c\u200d\ufeff"))
 
 VARIANT_RAW = "raw"
@@ -32,13 +37,26 @@ VARIANTS = (VARIANT_RAW, VARIANT_NORM)
 #: Human-readable rule summary, rendered into docs/normalization_rules.md.
 RULES: dict[str, str] = {
     "raw": "identity - reference and hypothesis are scored as published",
-    "en": "NFKC, lower-case, strip punctuation/symbols, expand numbers/ordinals/contractions "
-          "(openai-whisper EnglishTextNormalizer), collapse whitespace",
-    "hi": "NFKC (Devanagari digits -> ASCII), remove ZWJ/ZWNJ, lower-case, strip punctuation/symbols "
-          "(openai-whisper BasicTextNormalizer), collapse whitespace",
-    "ko": "NFKC (full-width punctuation/digits -> ASCII), lower-case, strip punctuation/symbols "
-          "(openai-whisper BasicTextNormalizer), collapse whitespace",
+    "en": "NFKC, lower-case, contractions/abbreviations expanded, spelled-out numbers mapped to "
+          "digits, brackets turned into commas (their content is spoken), punctuation/symbols "
+          "dropped, whitespace collapsed (openai-whisper EnglishTextNormalizer)",
+    "hi": "NFKC, drop zero-width joiners, lower-case, symbols and punctuation -> space, combining "
+          "marks (matras) preserved, Devanagari digits -> ASCII, whitespace collapsed",
+    "ko": "NFKC (full-width digits/punctuation -> ASCII), drop zero-width joiners, lower-case, "
+          "symbols and punctuation -> space, whitespace collapsed",
 }
+
+
+#: Parentheses/brackets become commas so the English normaliser keeps the words inside them.
+_BRACKET_CHARS = str.maketrans({c: ", " for c in "()[]"})
+_DEVA_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
+
+
+def _strip_punct(text: str) -> str:
+    """NFKC, then space out symbols/punctuation while keeping letters, digits and marks."""
+    text = unicodedata.normalize("NFKC", text)
+    spaced = "".join(" " if unicodedata.category(ch)[0] in "SP" else ch for ch in text)
+    return " ".join(spaced.lower().split())
 
 
 def normalize(text: str, language: str, variant: str = VARIANT_NORM) -> str:
@@ -46,12 +64,13 @@ def normalize(text: str, language: str, variant: str = VARIANT_NORM) -> str:
         return text
     if variant != VARIANT_NORM:
         raise ValueError(f"unknown variant: {variant}")
+    text = text.translate(_ZW)  # invisible formatting characters, in every language
     if language == "en":
-        return _EN(text)
+        return _EN(text.translate(_BRACKET_CHARS))
     if language == "hi":
-        return _BASIC(unicodedata.normalize("NFKC", text).translate(_ZW))
+        return _strip_punct(text).translate(_DEVA_DIGITS)
     if language == "ko":
-        return _BASIC(text)
+        return _strip_punct(text)
     raise ValueError(f"unknown language: {language}")
 
 

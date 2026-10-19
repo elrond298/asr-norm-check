@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import soundfile as sf
 import torch
 import transformers
 from transformers import AutoModelForMultimodalLM, AutoProcessor
@@ -30,7 +31,16 @@ CONFIG = {
     "do_sample": False,
     "max_new_tokens": 256,
     "language": "forced per sample (en/hi/ko)",
+    "audio": "soundfile, 16 kHz mono (FLEURS native rate, no resampling)",
 }
+
+
+def _audio_array(path: Path):
+    """FLEURS clips are 16 kHz mono; fail loudly rather than silently resample."""
+    data, sr = sf.read(path, dtype="float32", always_2d=True)
+    if sr != 16000 or data.shape[1] != 1:
+        raise ValueError(f"{path}: expected 16 kHz mono, got {sr} Hz / {data.shape[1]} ch")
+    return data[:, 0]
 
 
 def main() -> None:
@@ -44,14 +54,13 @@ def main() -> None:
         manifest = manifest[: args.limit]
 
     processor = AutoProcessor.from_pretrained(MODEL_ID)
-    model = AutoModelForMultimodalLM.from_pretrained(
-        MODEL_ID, dtype=torch.bfloat16, device_map=CONFIG["device"]
-    ).eval()
+    model = AutoModelForMultimodalLM.from_pretrained(MODEL_ID, dtype=torch.bfloat16)
+    model = model.to(CONFIG["device"]).eval()
     version = f"transformers {transformers.__version__} / {MODEL_ID}"
 
     def transcribe(row: dict) -> str:
         inputs = processor.apply_transcription_request(
-            audio=str(Path(__file__).resolve().parents[1] / row["audio_path"]),
+            audio=_audio_array(Path(__file__).resolve().parents[1] / row["audio_path"]),
             language=row["language"],
         ).to(model.device, model.dtype)
         with torch.inference_mode():
