@@ -19,6 +19,8 @@ Substitutions / deletions / insertions counted by jiwer on the normalised string
 | qwen3-asr | hi | 1233 | 111 | 15 | 12 | 11.19% | 4.54% |
 | qwen3-asr | ko | 781 | 50 | 38 | 8 | 12.29% | 4.20% |
 
+![Error composition](img/fig_error_mix.png)
+
 Three things stand out:
 
 1. **Substitutions dominate everywhere** (52–88% of errors). Neither model is losing words; they

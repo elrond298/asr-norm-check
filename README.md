@@ -12,6 +12,8 @@ viewer for the results.
 | Whisper `large-v3` | 4.72% | 24.09% | 16.77% | 15.33% |
 | Qwen3-ASR 1.7B | **3.65%** | **11.19%** | **12.29%** | **8.77%** |
 
+![WER and CER per language](docs/img/fig_wer_cer.png)
+
 Qwen3-ASR wins every language, by ~1 pp on English and by 13 pp on Hindi. Roughly half of
 Whisper's score is formatting rather than recognition (raw → normalised: 21.89% → 15.33%), and the
 gap survives that correction (−7.05 pp raw, −6.57 pp normalised). Details, caveats and the
@@ -70,11 +72,35 @@ After normalisation (`norm` variant):
 | ko | 19.29% → 16.77% | 14.17% → 12.29% | 7.13% → 4.84% | 6.32% → 4.20% |
 | all | 21.89% → 15.33% | 14.84% → 8.77% | 7.41% → 5.32% | 5.11% → 3.21% |
 
+![WER before and after normalisation](docs/img/fig_normalisation.png)
+
+Each line is one model on one language: the left end is the score as produced, the right end after
+the text clean-up. The length of the line is how much of that model's apparent error rate was
+formatting.
+
 **What survives normalisation:** the Qwen3-ASR − Whisper WER gap is −7.05 pp raw and −6.57 pp
 normalised (from unrounded rates — the rounded table subtracts to 6.56, which is also correct
 arithmetic on the rounded numbers). Both models lose 1.9–8.3 WER points to formatting, so the gap
 is mostly recognition quality rather than formatting, and the ranking does not depend on the
 scoring variant.
+
+**Not just the average.** Half the clips are near-perfect and a few are catastrophic, so the mean
+hides the shape. Share of clips below each error rate (higher curve = better model):
+
+![per-clip WER distribution](docs/img/fig_distribution.png)
+
+The same picture in numbers: 37 of 150 clips are perfect for both models; 52 are perfect for
+Qwen3-ASR, 41 for Whisper. Medians (Whisper → Qwen3-ASR): English 2.9% → 0.0%, Hindi 26.1% → 9.1%,
+Korean 13.3% → 9.2%. Hindi separates across the whole distribution (Whisper has **no** perfect clip
+there), English only in the tail, and Qwen3-ASR is *worse* than Whisper on 10 clips — every ranking
+has exceptions, which is why the per-clip files are committed alongside the averages.
+
+**What kind of errors these are** (share of edits, normalised scoring):
+
+![error composition](docs/img/fig_error_mix.png)
+
+Numbers inside the bars are percentages of that model's edits. Substitutions are everywhere; Korean
+is the outlier with ~40% deletions, which is the eojeol spacing effect below.
 
 **Three findings worth reading the details for:**
 1. **Bracketed text is not free either way.** FLEURS references contain asides in parentheses,
@@ -124,7 +150,8 @@ app/gradio_app.py    Gradio viewer over the precomputed outputs
 data/manifest.jsonl  frozen sample list (id, language, reference, audio path, sha256)
 data/manifest.meta.json  selection rule, dataset revision, counts, manifest hash
 outputs/             predictions_*.jsonl, metrics_*.csv, per_sample_scores.csv, error_cases.csv
-docs/                normalization_rules.md, error_analysis.md, img/ (screenshots)
+scripts/make_figures.py  renders docs/img/fig_*.png from the CSVs (nothing hand-drawn)
+docs/                normalization_rules.md, error_analysis.md, img/ (figures + app screenshots)
 tests/               assert-based self-checks (scoring edge cases, alignment gate)
 ```
 
@@ -147,6 +174,7 @@ uv run python scripts/run_whisper.py      # -> outputs/predictions_whisper.jsonl
 uv run python scripts/run_qwen.py         # -> outputs/predictions_qwen.jsonl
 uv run python scripts/score.py            # -> outputs/metrics_*.csv, per_sample_scores.csv
 uv run python scripts/analyze.py          # -> outputs/error_cases.csv, normalization_deltas.csv
+uv run python scripts/make_figures.py     # -> docs/img/fig_*.png (reads the CSVs only)
 uv run python app/gradio_app.py           # http://127.0.0.1:7860  (CPU only)
 ```
 

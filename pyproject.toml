@@ -11,4 +11,5 @@ dependencies = [
     "gradio>=5,<6",
     "soundfile>=0.12",
     "pandas>=2.0",
+    "matplotlib>=3.8",
 ]
