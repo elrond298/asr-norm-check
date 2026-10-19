@@ -23,8 +23,11 @@ from asrbench.common import MANIFEST, OUT_DIR, load_jsonl, write_predictions
 
 MODEL_NAME = "openai/whisper-large-v3"
 CHECKPOINT = "large-v3"
+#: whisper downloads from a content-addressed URL; its sha256 is the immutable weight identity.
+CHECKPOINT_SHA256 = whisper._MODELS[CHECKPOINT].rsplit("/", 2)[-2]
 CONFIG = {
     "checkpoint": CHECKPOINT,
+    "checkpoint_url": whisper._MODELS[CHECKPOINT],
     "device": "cuda",
     "sample_rate": 16000,
     "beam_size": 5,
@@ -37,15 +40,18 @@ CONFIG = {
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="score only the first N clips (timing probes)")
-    ap.add_argument("--out", type=Path, default=OUT_DIR / "predictions_whisper.jsonl")
+    # a probe run must never overwrite the canonical predictions the results were scored from
+    ap.add_argument("--out", type=Path, default=None,
+                    help="default: outputs/predictions_whisper.jsonl, or outputs/probe_whisper.jsonl with --limit")
     args = ap.parse_args()
 
     manifest = load_jsonl(MANIFEST)
     if args.limit:
         manifest = manifest[: args.limit]
+    out = args.out or OUT_DIR / ("probe_whisper.jsonl" if args.limit else "predictions_whisper.jsonl")
 
     model = whisper.load_model(CHECKPOINT, device=CONFIG["device"])
-    version = f"openai-whisper {md.version('openai-whisper')} / {MODEL_NAME}"
+    version = f"openai-whisper {md.version('openai-whisper')} / {MODEL_NAME} @ {CHECKPOINT_SHA256[:12]}"
 
     def transcribe(row: dict) -> str:
         audio = whisper.load_audio(str(Path(__file__).resolve().parents[1] / row["audio_path"]))
@@ -60,7 +66,7 @@ def main() -> None:
         )
         return result["text"].strip()
 
-    write_predictions(args.out, manifest, transcribe, "whisper", version, CONFIG)
+    write_predictions(out, manifest, transcribe, "whisper", version, CONFIG)
 
 
 if __name__ == "__main__":

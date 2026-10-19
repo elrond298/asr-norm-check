@@ -24,6 +24,11 @@ def load_predictions(path: Path) -> list[dict]:
         return [json.loads(line) for line in fh if line.strip()]
 
 
+def _squeeze(text: str) -> str:
+    """Collapse every whitespace run to one space (jiwer only splits on ' ', not tabs/newlines)."""
+    return " ".join(text.split())
+
+
 def _counts(ref: str, hyp: str) -> dict:
     ref_tokens, hyp_tokens = ref.split(), hyp.split()
     if not hyp_tokens:
@@ -40,13 +45,20 @@ def _counts(ref: str, hyp: str) -> dict:
 
 
 def per_sample(ref: str, hyp: str) -> dict:
+    """WER/CER for one pair of already-normalised strings.
+
+    Zero-denominator convention: an empty reference scores WER/CER 1.0 when the hypothesis is
+    non-empty and 0.0 when both sides are empty. Every reference in the frozen manifest is
+    non-empty, so this only affects ad-hoc use of the library.
+    """
+    ref, hyp = _squeeze(ref), _squeeze(hyp)
     counts = _counts(ref, hyp)
     n_ref = len(ref.split())
     errors = counts["substitutions"] + counts["deletions"] + counts["insertions"]
-    ref_chars = without_spaces(ref)
+    ref_chars, hyp_chars = without_spaces(ref), without_spaces(hyp)
     char_errors = 0
-    if ref_chars:
-        chars = jiwer.process_characters(ref_chars, without_spaces(hyp))
+    if ref_chars or hyp_chars:
+        chars = jiwer.process_characters(ref_chars, hyp_chars)
         char_errors = chars.substitutions + chars.deletions + chars.insertions
     return {
         **counts,
@@ -54,8 +66,8 @@ def per_sample(ref: str, hyp: str) -> dict:
         "hyp_tokens": len(hyp.split()),
         "ref_chars": len(ref_chars),
         "char_errors": char_errors,
-        "wer": errors / n_ref if n_ref else 0.0,
-        "cer": char_errors / len(ref_chars) if ref_chars else 0.0,
+        "wer": errors / n_ref if n_ref else (1.0 if hyp_chars else 0.0),
+        "cer": char_errors / len(ref_chars) if ref_chars else (1.0 if hyp_chars else 0.0),
     }
 
 

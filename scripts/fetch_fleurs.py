@@ -34,8 +34,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def sample_count(n: int, k: int) -> list[int]:
     """Evenly spaced indices over range(n); deterministic, no RNG."""
-    if n <= k:
-        return list(range(n))
+    if k < 1:
+        raise SystemExit(f"--per-language must be >= 1, got {k}")
+    if k == 1 or n <= k:
+        return list(range(min(n, k)))
     return [round(i * (n - 1) / (k - 1)) for i in range(k)]
 
 
@@ -99,7 +101,7 @@ def fetch_language(lang: str, lang_dir: str, k: int, data_dir: Path, force: bool
             "reference_raw": row["raw_transcription"],
             "gender": row["gender"],
             "duration_s": round(row["duration_s"], 3),
-            "audio_path": str(wav.relative_to(ROOT)),
+            "audio_path": str(wav.relative_to(ROOT)) if wav.is_relative_to(ROOT) else str(wav),
             "audio_sha256": hashlib.sha256(wav.read_bytes()).hexdigest(),
         })
     return out
@@ -122,18 +124,30 @@ def main() -> None:
         print(f"{lang}: {len(rows)} clips")
         manifest.extend(rows)
 
-    if args.verify and (data_dir / "manifest.jsonl").exists():
+    if args.verify:
+        # --verify is read-only: never overwrite the frozen list it is checking against
+        frozen_path = data_dir / "manifest.jsonl"
+        if not frozen_path.exists():
+            raise SystemExit(f"--verify needs an existing {frozen_path}")
         frozen = {}
-        for line in (data_dir / "manifest.jsonl").read_text(encoding="utf-8").splitlines():
+        for line in frozen_path.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 row = json.loads(line)
                 frozen[row["sample_id"]] = row
+        rebuilt_ids = [r["sample_id"] for r in manifest]
+        if set(rebuilt_ids) != set(frozen):
+            raise SystemExit(
+                f"verify: id sets differ (rebuilt {len(rebuilt_ids)}, frozen {len(frozen)}); "
+                f"missing {sorted(set(frozen) - set(rebuilt_ids))[:5]}, "
+                f"extra {sorted(set(rebuilt_ids) - set(frozen))[:5]}")
         mismatch = [r["sample_id"] for r in manifest
-                    if frozen.get(r["sample_id"], {}).get("audio_sha256") != r["audio_sha256"]
-                    or frozen.get(r["sample_id"], {}).get("reference") != r["reference"]]
+                    if frozen[r["sample_id"]].get("audio_sha256") != r["audio_sha256"]
+                    or frozen[r["sample_id"]].get("reference") != r["reference"]]
         print(f"verify: {len(manifest) - len(mismatch)}/{len(manifest)} clips match the frozen manifest")
         if mismatch:
             raise SystemExit(f"mismatch vs frozen manifest: {mismatch[:5]}")
+        print("verify: frozen manifest left untouched")
+        return
 
     payload = "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in manifest)
     (data_dir / "manifest.jsonl").write_text(payload, encoding="utf-8")

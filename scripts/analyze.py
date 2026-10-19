@@ -33,6 +33,16 @@ CASE_FIELDS = [
 ]
 
 
+def load_metrics() -> dict[tuple[str, str, str], dict]:
+    """Corpus-level rates as written by score.py, keyed by (model, language, variant)."""
+    rows = {}
+    for variant, name in (("raw", "metrics_baseline.csv"), ("norm", "metrics_normalized.csv")):
+        with (OUT_DIR / name).open(encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                rows[(row["model"], row["language"], variant)] = row
+    return rows
+
+
 def load_scores() -> dict[tuple[str, str, str], dict]:
     with (OUT_DIR / "per_sample_scores.csv").open(encoding="utf-8") as fh:
         return {(r["model"], r["sample_id"], r["variant"]): r for r in csv.DictReader(fh)}
@@ -48,9 +58,11 @@ def tokens_changed(ref: str, hyp: str) -> tuple[list[str], list[str], list[str]]
     subs, dels, ins = [], [], []
     for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b).get_opcodes():
         if tag == "replace":
-            subs += [f"{x} -> {y}" for x, y in zip(a[i1:i2], b[j1:j2])]
-            subs += [f"{x} -> (nothing)" for x in a[i1 + (j2 - j1):i2]]
-            subs += [f"(nothing) -> {y}" for y in b[j1 + (i2 - i1):j2]]
+            # pair what can be paired; surplus ref tokens are deletions, surplus hyp insertions
+            paired = min(i2 - i1, j2 - j1)
+            subs += [f"{x} -> {y}" for x, y in zip(a[i1:i1 + paired], b[j1:j1 + paired])]
+            dels += a[i1 + paired:i2]
+            ins += b[j1 + paired:j2]
         elif tag == "delete":
             dels += a[i1:i2]
         elif tag == "insert":
@@ -115,25 +127,23 @@ def main() -> None:
             total = max(s + d + i, 1)
             print(f"{model:10s} {lang:5s} {s:5d} {d:5d} {i:5d}  S {s / total:.0%} D {d / total:.0%} I {i / total:.0%}")
 
-    print("\n== raw -> normalised WER / CER ==")
+    print("\n== raw -> normalised WER / CER (corpus level, as in metrics_*.csv) ==")
+    metrics = load_metrics()
     for model in MODELS:
         for lang in LANGUAGES:
-            rows = [c for c in cases if c["model"] == model and c["language"] == lang]
-            raw_wer = sum(c["wer_raw"] for c in rows) / len(rows)
-            norm_wer = sum(c["wer_norm"] for c in rows) / len(rows)
-            raw_cer = sum(c["cer_raw"] for c in rows) / len(rows)
-            norm_cer = sum(c["cer_norm"] for c in rows) / len(rows)
-            print(f"{model:10s} {lang:5s} WER {raw_wer * 100:6.2f}% -> {norm_wer * 100:6.2f}%  "
-                  f"CER {raw_cer * 100:6.2f}% -> {norm_cer * 100:6.2f}%")
+            raw, norm = metrics[(model, lang, "raw")], metrics[(model, lang, "norm")]
+            print(f"{model:10s} {lang:5s} "
+                  f"WER {float(raw['wer']) * 100:6.2f}% -> {float(norm['wer']) * 100:6.2f}%  "
+                  f"CER {float(raw['cer']) * 100:6.2f}% -> {float(norm['cer']) * 100:6.2f}%")
 
-    print("\n== model gap (qwen3-asr minus whisper, per-sample mean WER) ==")
-    for lang in LANGUAGES:
-        row = []
-        for variant in ("wer_raw", "wer_norm"):
-            means = {m: sum(c[variant] for c in cases if c["model"] == m and c["language"] == lang)
-                     / len([c for c in cases if c["model"] == m and c["language"] == lang]) for m in MODELS}
-            row.append(f"{variant}: {(means['qwen3-asr'] - means['whisper']) * 100:+.2f}pp")
-        print(f"{lang:5s} " + "   ".join(row))
+    print("\n== model gap (qwen3-asr minus whisper, corpus WER) ==")
+    for lang in LANGUAGES + ["all"]:
+        parts = []
+        for variant in ("raw", "norm"):
+            gap = (float(metrics[("qwen3-asr", lang, variant)]["wer"])
+                   - float(metrics[("whisper", lang, variant)]["wer"]))
+            parts.append(f"{variant}: {gap * 100:+.2f}pp")
+        print(f"{lang:5s} " + "   ".join(parts))
 
     print("\n== 8 largest normalisation shifts ==")
     for c in deltas[:8]:

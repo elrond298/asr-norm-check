@@ -53,6 +53,13 @@ def main() -> None:
     check("ins count", (d["insertions"], d["wer"]), (1, 0.5))
     d = per_sample("a b", "")
     check("empty hyp", (d["deletions"], d["wer"], d["cer"]), (2, 1.0, 1.0))
+    d = per_sample("", "a b")
+    check("empty ref", (d["insertions"], d["wer"], d["cer"]), (2, 1.0, 1.0))
+    check("both empty", per_sample("", " "), {"hits": 0, "substitutions": 0, "deletions": 0,
+          "insertions": 0, "ref_tokens": 0, "hyp_tokens": 0, "ref_chars": 0, "char_errors": 0,
+          "wer": 0.0, "cer": 0.0})
+    # tabs/newlines are whitespace too: jiwer alone would call "a\tb" vs "a b" a substitution
+    check("tab == space", per_sample("a\tb", "a b")["wer"], 0.0)
 
     # CER ignores spaces: a spacing error is free for CER, costs a token for WER
     d = per_sample("a b", "ab")

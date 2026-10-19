@@ -1,8 +1,22 @@
 # asr-bench — Whisper vs Qwen3-ASR on a frozen FLEURS subset
 
-A small, reproducible multilingual ASR benchmark and error-analysis tool: 150 fixed clips of
-FLEURS (English / Hindi / Korean, 50 each), two models run through their official interfaces,
-one scoring rule, a raw-vs-normalised comparison, and a Gradio viewer for the results.
+A small, reproducible multilingual automatic speech recognition (**ASR**) benchmark and
+error-analysis tool: 150 fixed clips of FLEURS (English / Hindi / Korean, 50 each), two models run
+through their official interfaces, one scoring rule, a raw-vs-normalised comparison, and a Gradio
+viewer for the results.
+
+**Headline result** — corpus WER, normalised scoring, 50 clips per language:
+
+| | English | Hindi | Korean | all 150 |
+|---|---:|---:|---:|---:|
+| Whisper `large-v3` | 4.72% | 24.09% | 16.77% | 15.33% |
+| Qwen3-ASR 1.7B | **3.65%** | **11.19%** | **12.29%** | **8.77%** |
+
+Qwen3-ASR wins every language, by ~1 pp on English and by 13 pp on Hindi. Roughly half of
+Whisper's score is formatting rather than recognition (raw → normalised: 21.89% → 15.33%), and the
+gap survives that correction (−7.05 pp raw, −6.57 pp normalised). Details, caveats and the
+error-by-error analysis follow; none of this is a ranking claim without an uncertainty analysis,
+which was not run.
 
 ## Scope (frozen)
 
@@ -10,9 +24,9 @@ one scoring rule, a raw-vs-normalised comparison, and a Gradio viewer for the re
 |---|---|
 | Languages | English (`en_us`), Hindi (`hi_in`), Korean (`ko_kr`) |
 | Clips | 150 total — 50 per language, fixed list in `data/manifest.jsonl` |
-| Data | FLEURS `test` split, dataset revision `70bb2e84…` (pinned), CC-BY-4.0 |
+| Data | FLEURS — Google's read-aloud Wikipedia/books corpus — `test` split, revision `70bb2e84…` (pinned), CC-BY-4.0 |
 | Models | `openai/whisper-large-v3` (openai-whisper) and `Qwen/Qwen3-ASR-1.7B-hf` (Transformers) |
-| Metrics | corpus WER (whitespace tokens) and CER (space-free characters), per language |
+| Metrics | **WER** = word error rate, edits ÷ reference words (whitespace tokens), **CER** = the same on space-free characters. Corpus-level = summed over the 50 clips, not averaged per clip. Differences are in **pp** = percentage points |
 | Scoring variants | `raw` (as produced) and `norm` (per-language normalisation) |
 | Language mode | forced per clip for both models, so the comparison is like-for-like |
 
@@ -26,14 +40,14 @@ WER / CER in %, corpus-level over the 50 clips of each language (150 total). Ful
 scores are in `outputs/`; error mechanisms are analysed case by case in
 [`docs/error_analysis.md`](docs/error_analysis.md).
 
-**After normalisation (`norm` variant, the headline numbers):**
+After normalisation (`norm` variant):
 
-| language | Whisper WER | Qwen3-ASR WER | Whisper CER | Qwen3-ASR CER |
-|---|---:|---:|---:|---:|
-| en (50) | 4.72% | **3.65%** | 2.30% | **1.53%** |
-| hi (50) | 24.09% | **11.19%** | 8.76% | **4.54%** |
-| ko (50) | 16.77% | **12.29%** | 4.84% | **4.20%** |
-| all (150) | 15.33% | **8.77%** | 5.32% | **3.21%** |
+| language | Whisper WER % | Qwen3-ASR WER % | ΔWER pp | Whisper CER % | Qwen3-ASR CER % | ΔCER pp |
+|---|---:|---:|---:|---:|---:|---:|
+| en (50) | 4.72 | **3.65** | −1.07 | 2.30 | **1.53** | −0.77 |
+| hi (50) | 24.09 | **11.19** | −12.90 | 8.76 | **4.54** | −4.22 |
+| ko (50) | 16.77 | **12.29** | −4.48 | 4.84 | **4.20** | −0.64 |
+| en+hi+ko (150) | 15.33 | **8.77** | −6.57 | 5.32 | **3.21** | −2.11 |
 
 **Effect of normalisation (same audio, same hypotheses, different scoring rule):**
 
@@ -44,27 +58,46 @@ scores are in `outputs/`; error mechanisms are analysed case by case in
 | ko | 19.29% → 16.77% | 14.17% → 12.29% | 7.13% → 4.84% | 6.32% → 4.20% |
 | all | 21.89% → 15.33% | 14.84% → 8.77% | 7.41% → 5.32% | 5.11% → 3.21% |
 
-**What survives normalisation:** the Qwen3-ASR − Whisper WER gap is −7.05 pp raw and −6.56 pp
-normalised. Both models lose 2–8 WER points to formatting, so the gap is mostly recognition
-quality rather than formatting, and the ranking does not depend on the scoring variant. The
-per-language gaps (norm, pp): en −1.07, hi −12.90, ko −4.48 — only the Hindi and Korean gaps are
-larger than what 50 clips can resolve.
+**What survives normalisation:** the Qwen3-ASR − Whisper WER gap is −7.05 pp raw and −6.57 pp
+normalised (from unrounded rates — the rounded table subtracts to 6.56, which is also correct
+arithmetic on the rounded numbers). Both models lose 1.9–8.3 WER points to formatting, so the gap
+is mostly recognition quality rather than formatting, and the ranking does not depend on the
+scoring variant.
 
-**Two findings worth reading the details for:**
-1. The stock English normaliser deletes text in parentheses, and in FLEURS those asides are
-   *spoken* — that alone overcharges both models by ~1.9 pp WER (see
-   `docs/normalization_rules.md`); this repo keeps them.
-2. On Hindi and Korean, WER is dominated by segmentation/spacing policy (compounds, eojeol,
-   nukta), not by listening. CER is reported for that reason; both metrics agree on the ranking.
+**Three findings worth reading the details for:**
+1. **Bracketed text is not free either way.** FLEURS references contain asides in parentheses,
+   some read aloud (`…can climb (though not well), swim…`) and some only written
+   (`80 km (50 mi)`). The stock English normaliser deletes them; measuring both policies on this
+   subset shows deleting costs both models 1.7–2.1 pp WER on English and Hindi but *saves*
+   1.8–2.0 pp on Korean (table in `docs/normalization_rules.md`). This repo keeps the text, so a
+   model is charged for what it says, and reports the ~2 pp Korean cost.
+2. **On Hindi and Korean, WER measures spelling policy as much as listening.** Where a word breaks
+   (Hindi compounds) and where a space goes (Korean *eojeol* — the spacing-defined word block),
+   plus the *nukta* dot that changes a Devanagari consonant, move WER by whole words. CER is
+   reported for that reason; both metrics agree on the ranking here.
+3. **A rule set can be one-sided.** English folds spoken numbers to digits; Korean does not, so
+   Whisper saying `백오십` where the reference has `150` is charged (case 16 in
+   `docs/error_analysis.md`).
+
+No uncertainty analysis was run (no bootstrap, no repeated decoding), so treat this as 150 point
+estimates, not as a ranking with error bars: the English gap of about 1 pp is well inside what
+sampling variation could produce at this size, while the Hindi gap is far larger than any
+plausible sampling effect.
 
 
 ## Demo
 
 `uv run python app/gradio_app.py` → http://127.0.0.1:7860 (no model loading; reads `outputs/` only).
 
-| Metrics tab | Samples tab |
-|---|---|
-| ![metrics tab](docs/img/app_metrics.png) | ![samples tab](docs/img/app_samples.png) |
+**Metrics tab** — per-language scores for the selected variant, plus the raw-vs-norm comparison
+([full size](docs/img/app_metrics.png)):
+
+![metrics tab](docs/img/app_metrics.png)
+
+**Samples tab** — audio, both models' per-clip scores, and a word-level diff
+([full size](docs/img/app_samples.png)):
+
+![samples tab](docs/img/app_samples.png)
 
 The Metrics tab shows the per-language table for the selected scoring variant plus the raw-vs-norm
 comparison; the Samples tab plays the clip, shows both models' scores for that `sample_id`, and
@@ -79,15 +112,21 @@ app/gradio_app.py    Gradio viewer over the precomputed outputs
 data/manifest.jsonl  frozen sample list (id, language, reference, audio path, sha256)
 data/manifest.meta.json  selection rule, dataset revision, counts, manifest hash
 outputs/             predictions_*.jsonl, metrics_*.csv, per_sample_scores.csv, error_cases.csv
-docs/                normalization_rules.md, error_analysis.md
+docs/                normalization_rules.md, error_analysis.md, img/ (screenshots)
+tests/               assert-based self-checks (scoring edge cases, alignment gate)
 ```
 
 ## Reproduce
 
-Requires Python 3.12, [uv](https://docs.astral.sh/uv/), ffmpeg, and a CUDA GPU (~8 GB is
-enough for both models). Wall time on an RTX 4060 Laptop 8 GB: audio fetch ~2 min,
-Whisper ~38 min (0.8× realtime), Qwen3-ASR ~8 min (3.8× realtime), scoring and analysis
-seconds. The Gradio app needs no GPU.
+Requires Python 3.12, [uv](https://docs.astral.sh/uv/), ffmpeg, and — only for the two inference
+steps — a CUDA GPU (this run used all 8 GB of a laptop RTX 4060; each model alone fits in ~4 GB).
+Everything else (scoring, analysis, the app) runs on CPU.
+
+Sizes and time on an RTX 4060 Laptop 8 GB: audio download ~110 MB / ~2 min, Whisper
+`large-v3` weights ~3 GB + ~38 min inference (0.8× realtime), Qwen3-ASR weights ~4 GB + ~8 min
+inference (3.8× realtime); scoring and analysis take seconds. On a busy machine (load average
+20+) Whisper decoding stalls to ~0.25× realtime; the transcripts are unaffected, only the
+per-clip `runtime_s` recorded in the prediction files.
 
 ```bash
 uv sync                                   # creates .venv from uv.lock
@@ -96,21 +135,37 @@ uv run python scripts/run_whisper.py      # -> outputs/predictions_whisper.jsonl
 uv run python scripts/run_qwen.py         # -> outputs/predictions_qwen.jsonl
 uv run python scripts/score.py            # -> outputs/metrics_*.csv, per_sample_scores.csv
 uv run python scripts/analyze.py          # -> outputs/error_cases.csv, normalization_deltas.csv
-uv run python app/gradio_app.py           # http://127.0.0.1:7860
+uv run python app/gradio_app.py           # http://127.0.0.1:7860  (CPU only)
 ```
 
-No GPU? The committed `outputs/` directory contains every result file, so after `uv sync` the
-last command alone is enough to browse the tables and samples without re-running inference.
+No GPU? The committed `outputs/` directory contains every result file, so the app and the tables
+can be browsed without re-running inference. Audio playback still needs `data/audio/`, which is
+git-ignored — run `scripts/fetch_fleurs.py` once (or the viewer shows a "audio file missing" note
+next to the transcript).
 
 The sample list is pinned twice over: the dataset revision in `scripts/fetch_fleurs.py`, and a
 sha256 per audio file in `data/manifest.jsonl`. To confirm your download is identical to the one
 scored here:
 
 ```bash
-uv run python scripts/fetch_fleurs.py --verify
+uv run python scripts/fetch_fleurs.py --verify   # read-only: refuses to rewrite the frozen list
 ```
 
 The Gradio app reads only precomputed files — it never loads a model.
+
+## Checks
+
+Three cheap gates, no GPU needed:
+
+```bash
+uv run python tests/test_scoring.py     # WER/CER definitions, empty refs, whitespace handling
+uv run python tests/test_alignment.py   # every way predictions can drift from the manifest
+uv run python scripts/score.py          # refuses to write metrics if alignment fails
+```
+
+`scripts/score.py` writes `outputs/alignment_check.md` first and aborts on any mismatch in sample
+ids, language, reference text, empty output or row schema — a wrong language would otherwise
+silently swap the normaliser, and a wrong reference would change the denominator.
 
 Reproducibility was checked directly: re-running the first 10 clips with the same commands gave
 byte-identical `model_output` for both models (10/10 Whisper, 10/10 Qwen3-ASR), and
@@ -120,13 +175,15 @@ byte-identical `model_output` for both models (10/10 Whisper, 10/10 Qwen3-ASR), 
 
 | | Whisper | Qwen3-ASR |
 |---|---|---|
-| Weights | `large-v3` (openai-whisper, azure CDN) | `Qwen/Qwen3-ASR-1.7B-hf` (HF) |
+| Weights | `large-v3`, sha256 `e5b1a55b…` (whisper's content-addressed azure URL) | `Qwen/Qwen3-ASR-1.7B-hf`, HF commit `bcd2b5b7…` |
 | Code | `openai-whisper` (see `uv.lock`) | `transformers` (see `uv.lock`) |
 | Decoding | beam search, beam 5, `temperature=0.0`, `condition_on_previous_text=False` | greedy (`do_sample=False`), `max_new_tokens=256` |
 | Precision | fp16 | bfloat16 |
 | Language | forced (`en`/`hi`/`ko`) | forced (`en`/`hi`/`ko`) |
 
-Exact strings are recorded per prediction file in `model_version` and `inference_config`.
+Both revisions are passed explicitly in the run scripts (`whisper._MODELS[...]` URL for Whisper,
+`revision=` for Qwen), so a re-run cannot silently pick up different weights. Exact strings are
+recorded per prediction file in `model_version` and `inference_config`.
 
 ## What each file contains
 
@@ -169,8 +226,8 @@ Exact strings are recorded per prediction file in `model_version` and `inference
   that audio and reference belong together: both models reproduce the references closely (English
   WER 3.7–4.7%) and every clip is taken straight from FLEURS' own `test.tsv` row. FLEURS
   references carry occasional orthography choices that neither model is wrong about, and some
-  contain bracketed glosses that are never spoken (see the Korean cases in
-  `docs/error_analysis.md`).
+  contain bracketed glosses that neither model transcribes; whether those glosses are spoken was
+  not audited (see the Korean cases in `docs/error_analysis.md`).
 - **Not done:** the optional language-weight sensitivity analysis (stage 9) and any
   statistical significance testing.
 

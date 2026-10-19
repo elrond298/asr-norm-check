@@ -9,9 +9,10 @@ English reuses openai-whisper's ``EnglishTextNormalizer`` (the de-facto ASR scor
 reference: lower-case, contractions/abbreviations expanded, spelled-out numbers mapped to
 digits, punctuation and symbols dropped, whitespace collapsed).
 
-Bracketed text is kept in all three languages: FLEURS uses parentheses for asides that the
-speaker actually reads ("... can climb (though not well), swim ..."), so deleting them would
-book every correctly transcribed aside as an insertion. openai-whisper's English normaliser
+Bracketed text is kept in all three languages: FLEURS uses parentheses both for spoken asides
+("... can climb (though not well), swim ...") and for written glosses ("80 km (50 mi)"), so
+neither policy is neutral; keeping the text scored better on en/hi and worse on ko, and is
+measured in docs/normalization_rules.md. openai-whisper's English normaliser
 deletes parenthesised spans, so for English the brackets are turned into commas first.
 
 Hindi and Korean use the same idea but with a cleaner that keeps combining marks.

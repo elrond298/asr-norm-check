@@ -56,8 +56,22 @@ def diff_html(ref: str, hyp: str) -> str:
             ref_parts.append(ref_chunk)
             hyp_parts.append(hyp_chunk)
         elif tag == "replace":
-            ref_parts.append(f'<span style="{_STYLES["sub"]}">{ref_chunk}</span>')
-            hyp_parts.append(f'<span style="{_STYLES["sub"]}">{hyp_chunk}</span>')
+            # pair what can be paired; a surplus token on either side is a deletion/insertion
+            paired = min(i2 - i1, j2 - j1)
+            paired_ref, paired_hyp = " ".join(a[i1:i1 + paired]), " ".join(b[j1:j1 + paired])
+            surplus_ref, surplus_hyp = " ".join(a[i1 + paired:i2]), " ".join(b[j1 + paired:j2])
+            chunk = []
+            if paired_ref:
+                chunk.append(f'<span style="{_STYLES["sub"]}">{paired_ref}</span>')
+            if surplus_ref:
+                chunk.append(f'<span style="{_STYLES["del"]}">{surplus_ref}</span>')
+            ref_parts.append(" ".join(chunk))
+            chunk = []
+            if paired_hyp:
+                chunk.append(f'<span style="{_STYLES["sub"]}">{paired_hyp}</span>')
+            if surplus_hyp:
+                chunk.append(f'<span style="{_STYLES["ins"]}">{surplus_hyp}</span>')
+            hyp_parts.append(" ".join(chunk))
         elif tag == "delete":
             ref_parts.append(f'<span style="{_STYLES["del"]}">{ref_chunk}</span>')
         elif tag == "insert":
@@ -75,12 +89,14 @@ def metrics_table(variant: str) -> pd.DataFrame:
     rows = []
     for language in LANGUAGES + ["all"]:
         row = {"language": language}
+        rates = {}
         for model in MODELS:
-            hit = df[(df["model"] == model) & (df["language"] == language)]
-            row[f"{model} WER %"] = round(float(hit["wer"].iloc[0]) * 100, 2)
-            row[f"{model} CER %"] = round(float(hit["cer"].iloc[0]) * 100, 2)
-        row["ΔWER (qwen−whisper, pp)"] = round(
-            row["qwen3-asr WER %"] - row["whisper WER %"], 2)
+            hit = df[(df["model"] == model) & (df["language"] == language)].iloc[0]
+            rates[model] = float(hit["wer"])
+            row[f"{model} WER %"] = round(rates[model] * 100, 2)
+            row[f"{model} CER %"] = round(float(hit["cer"]) * 100, 2)
+        # difference of the rates, not of the rounded percentages
+        row["ΔWER (qwen−whisper, pp)"] = round((rates["qwen3-asr"] - rates["whisper"]) * 100, 2)
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -88,7 +104,7 @@ def metrics_table(variant: str) -> pd.DataFrame:
 def normalization_table() -> pd.DataFrame:
     rows = []
     for model in MODELS:
-        for language in LANGUAGES:
+        for language in LANGUAGES + ["all"]:
             cells = {v: METRICS[(METRICS["model"] == model) & (METRICS["language"] == language)
                                 & (METRICS["variant"] == v)].iloc[0] for v in ("raw", "norm")}
             rows.append({
@@ -108,10 +124,14 @@ def view(label: str, variant: str):
     row = MANIFEST[sid]
     language = row["language"]
     ref = normalize(row["reference"], language, variant)
-    audio = str(ROOT / row["audio_path"])
+    audio_path = ROOT / row["audio_path"]
+    audio = str(audio_path) if audio_path.exists() else None
 
     blocks = [f"<div style='color:#555'>{sid} · {language} · {row['duration_s']}s · "
               f"{row['gender']} · variant=<b>{variant}</b></div>"]
+    if audio is None:
+        blocks.append("<div style='color:#b45309'>audio file missing — run "
+                      "<code>scripts/fetch_fleurs.py</code> to enable playback</div>")
     scores = []
     for model in MODELS:
         pred = PREDS[model].get(sid)
@@ -135,34 +155,55 @@ def build() -> gr.Blocks:
     with gr.Blocks(title="ASR benchmark · FLEURS en/hi/ko") as demo:
         gr.Markdown(
             "# Whisper vs Qwen3-ASR on FLEURS\n"
-            "50 clips each for English, Hindi, Korean. **WER** = word error rate over whitespace "
-            "tokens; **CER** = character error rate over space-free characters (the meaningful "
-            "metric for Hindi/Korean). *raw* scores the strings as produced; *norm* applies the "
-            "language-specific normalisation in `docs/normalization_rules.md`."
+            "50 clips each for English, Hindi, Korean. **WER** = word error rate, edits ÷ reference "
+            "words; **CER** = the same on space-free characters (the meaningful metric for "
+            "Hindi/Korean). *raw* scores strings as produced; *norm* applies the language-specific "
+            "normalisation in `docs/normalization_rules.md`.\n\n"
+            "Every number here comes from the committed files in `outputs/` — this app loads "
+            "precomputed predictions and never runs a model."
         )
-        variant = gr.Radio(["norm", "raw"], value="norm", label="Scoring variant")
+        variant = gr.Radio(["norm", "raw"], value="norm", label="Scoring variant (WER/CER columns below)")
+        variant_note = gr.Markdown("Showing **norm** scoring.")
 
         with gr.Tab("Metrics"):
-            comparison = gr.Dataframe(value=metrics_table("norm"), label="Per-language results",
+            gr.Markdown("### Per-language results")
+            comparison = gr.Dataframe(value=metrics_table("norm"),
+                                      label="Per-language results · scores in %, Δ in percentage points",
                                       interactive=False, wrap=True)
-            gr.Markdown("### Effect of text normalisation")
-            gr.Dataframe(value=normalization_table(), label="raw vs norm", interactive=False, wrap=True)
+            gr.Markdown("### Effect of text normalisation (both variants, independent of the switch above)")
+            gr.Dataframe(value=normalization_table(),
+                         label="raw vs norm · WER/CER in %, Δ in percentage points",
+                         interactive=False, wrap=True)
             gr.Markdown(
                 "A negative Δ means the model was penalised for formatting that normalisation "
                 "ignores. It does not mean the model got better: the same audio, the same "
                 "hypotheses, a different scoring rule — see `docs/normalization_rules.md`."
             )
-            variant.change(metrics_table, inputs=variant, outputs=comparison)
+            def show_variant(selected_variant: str):
+                return metrics_table(selected_variant), f"Showing **{selected_variant}** scoring."
+
+            variant.change(show_variant, inputs=variant, outputs=[comparison, variant_note])
 
         with gr.Tab("Samples"):
             language = gr.Radio(LANGUAGES, value="en", label="Language")
             en_choices = [c for c in choices if MANIFEST[LABELS[c]]["language"] == "en"]
             picker = gr.Dropdown(choices=en_choices, value=en_choices[0] if en_choices else None,
-                                 label="Sample", filterable=True)
+                                 label="Sample", filterable=True,
+                                 info="type a sample id (e.g. fleurs_hi_1774) or part of the text to filter")
+            detail = gr.HTML()
             with gr.Row():
                 audio = gr.Audio(label="Audio", type="filepath", interactive=False)
-                scores = gr.Dataframe(label="Scores for this sample", interactive=False, wrap=True)
-            detail = gr.HTML()
+                scores = gr.Dataframe(label="Scores for this clip · S/D/I = substitution/deletion/insertion",
+                                      interactive=False, wrap=True)
+            gr.Markdown(
+                "Colours: "
+                "<span style='background:#ffe9b8;color:#7c4a03;padding:0 4px'>substitution</span> "
+                "<span style='background:#ffd7d5;color:#8b1a10;padding:0 4px'>deletion</span> "
+                "<span style='background:#d6f5d6;color:#14532d;padding:0 4px'>insertion</span>",)
+            gr.Markdown(
+                "*Highlighting is a word-level diff (difflib). The S/D/I columns are jiwer's "
+                "counts; on individual clips the two can pair tokens differently, so trust the "
+                "counts for numbers and the colours for where to look.*", elem_classes="muted")
 
             def on_language(lang: str, selected_variant: str):
                 opts = [c for c in choices if MANIFEST[LABELS[c]]["language"] == lang]

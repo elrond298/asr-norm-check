@@ -24,8 +24,11 @@ from transformers import AutoModelForMultimodalLM, AutoProcessor
 from asrbench.common import MANIFEST, OUT_DIR, load_jsonl, write_predictions
 
 MODEL_ID = "Qwen/Qwen3-ASR-1.7B-hf"
+#: pinned HF commit, so a later upload cannot silently change the weights or processor config
+REVISION = "bcd2b5b7f32b480ab5790554cfa8347f246a14f3"
 CONFIG = {
     "model_id": MODEL_ID,
+    "revision": REVISION,
     "device": "cuda",
     "dtype": "bfloat16",
     "do_sample": False,
@@ -46,17 +49,20 @@ def _audio_array(path: Path):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0)
-    ap.add_argument("--out", type=Path, default=OUT_DIR / "predictions_qwen.jsonl")
+    # a probe run must never overwrite the canonical predictions the results were scored from
+    ap.add_argument("--out", type=Path, default=None,
+                    help="default: outputs/predictions_qwen.jsonl, or outputs/probe_qwen.jsonl with --limit")
     args = ap.parse_args()
 
     manifest = load_jsonl(MANIFEST)
     if args.limit:
         manifest = manifest[: args.limit]
+    out = args.out or OUT_DIR / ("probe_qwen.jsonl" if args.limit else "predictions_qwen.jsonl")
 
-    processor = AutoProcessor.from_pretrained(MODEL_ID)
-    model = AutoModelForMultimodalLM.from_pretrained(MODEL_ID, dtype=torch.bfloat16)
+    processor = AutoProcessor.from_pretrained(MODEL_ID, revision=REVISION)
+    model = AutoModelForMultimodalLM.from_pretrained(MODEL_ID, revision=REVISION, dtype=torch.bfloat16)
     model = model.to(CONFIG["device"]).eval()
-    version = f"transformers {transformers.__version__} / {MODEL_ID}"
+    version = f"transformers {transformers.__version__} / {MODEL_ID} @ {REVISION[:12]}"
 
     def transcribe(row: dict) -> str:
         inputs = processor.apply_transcription_request(
@@ -72,7 +78,7 @@ def main() -> None:
         new_ids = generated[:, inputs["input_ids"].shape[1]:]
         return processor.decode(new_ids, return_format="transcription_only")[0].strip()
 
-    write_predictions(args.out, manifest, transcribe, "qwen3-asr", version, CONFIG)
+    write_predictions(out, manifest, transcribe, "qwen3-asr", version, CONFIG)
 
 
 if __name__ == "__main__":
