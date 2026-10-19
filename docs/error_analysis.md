@@ -122,16 +122,20 @@ Rare-word coverage is where the two models differ most in English; both occurren
 name are charged.
 
 **5. `fleurs_en_1822` — transliterating a non-English proper noun**
-Reference: *…Daru l-Badya…*
-Whisper: *Daru Ibadia* → **2 S + 1 D + 1 I** (`l→ibadia`, `badya` dropped, `establishing`
-inserted), 16.0%. Qwen3-ASR: *Daru Ibadiya* → **1 S + 1 D** (`l→ibadiya`, `badya` dropped), 8.0%.
+Reference: *…Daru l-Badya … traders who established trading bases there.*
+Whisper: *Daru Ibadia … traders who were establishing trading bases there* → **2 S + 1 D + 1 I**
+(`l→ibadia`, `established→were`, `badya` dropped, `establishing` inserted), 16.0%.
+Qwen3-ASR: *Daru Ibadiya, … traders who established trading bases there* → **1 S + 1 D**
+(`l→ibadiya`, `badya` dropped), 8.0%.
 Neither model can render the Arabic article split as `l-` plus the name; both glue it into one
 token. Normalisation cannot repair this — it is a lexical gap, not formatting.
 
 **6. `fleurs_en_1830` — compound spelling, and what the normaliser already absorbs**
 Reference: *…South West Africa People's Organisation (SWAPO)…*
-Both models: *…Southwest Africa People's Organization, SWAPO…* → **1 S + 1 D** (`south→southwest`,
-`west` dropped), 11.1% each.
+Whisper: *…Southwest Africa People's Organization, SWAPO…*; Qwen3-ASR keeps the parentheses:
+*…Southwest Africa People's Organization (SWAPO)…*. Both → **1 S + 1 D** (`south→southwest`,
+`west` dropped), 11.1% each — the only difference between them is the brackets their output has
+and the normaliser removes from both.
 Two things normalisation already absorbs identically on both sides: `Organisation` → `organization`
 and the contraction `People's` → `people is`. Only the compound spelling is charged. The spoken
 gloss `SWAPO` matches the reference because brackets are kept (see
@@ -222,7 +226,8 @@ One model imposes digit→word, the other word→digit; both pay.
 Reference: *…인쇄물이 150에서 200장 만들어졌다.*
 Whisper: *…백오십에서 이백장 만들어졌다* → **5 S + 2 D**, 58.3%, of which two substitutions
 (`150→백오십`, `200→이백`) are the number words, plus `밤 동안→밤동안` and `던랩→덜렙`.
-Qwen3-ASR: *…150에서 200장…* → **2 S + 1 D**, 25.0% (only the name `던랩→델랩` and the merge).
+Qwen3-ASR: *…150에서 200장…* → **2 S + 1 D**, 25.0% (the name `던랩→델랩` and the particle
+`라고` swallowed into `브로드사이드라고`).
 Whisper said the numbers correctly, in words. English gets a digit-fold rule; Korean does not, so
 this is a limitation of the rule set that happens to favour the digit-emitting model.
 

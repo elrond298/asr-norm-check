@@ -181,9 +181,12 @@ byte-identical `model_output` for both models (10/10 Whisper, 10/10 Qwen3-ASR), 
 | Precision | fp16 | bfloat16 |
 | Language | forced (`en`/`hi`/`ko`) | forced (`en`/`hi`/`ko`) |
 
-Both revisions are passed explicitly in the run scripts (`whisper._MODELS[...]` URL for Whisper,
-`revision=` for Qwen), so a re-run cannot silently pick up different weights. Exact strings are
-recorded per prediction file in `model_version` and `inference_config`.
+Both models are pinned in the run scripts: Whisper through the content-addressed Azure URL in
+`whisper._MODELS['large-v3']` (its sha256 `e5b1a55b…` *is* the weight identity — there is no other
+download path), Qwen3-ASR through `revision=bcd2b5b7…`. A re-run therefore cannot silently pick
+up different weights. Exact strings are recorded per prediction file in `model_version`; the
+committed `predictions_qwen.jsonl` records the HF commit, `predictions_whisper.jsonl` records the
+openai-whisper version and the `large-v3` checkpoint name (its URL hash is the pin).
 
 ## What each file contains
 
