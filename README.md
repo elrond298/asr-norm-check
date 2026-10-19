@@ -18,6 +18,18 @@ gap survives that correction (−7.05 pp raw, −6.57 pp normalised). Details, c
 error-by-error analysis follow; none of this is a ranking claim without an uncertainty analysis,
 which was not run.
 
+**Two scoring variants, same predictions, same references:**
+
+- **`raw`** — the strings exactly as FLEURS published them and as the model emitted them. Only
+  whitespace tokenises; nothing is rewritten. This measures "did the model produce this literal
+  text", so a correct answer with different punctuation or digit style counts as an error.
+- **`norm`** — the same text after the per-language clean-up in
+  [What `norm` actually does](#what-norm-actually-does), applied **identically to reference and
+  hypothesis**, before WER/CER are computed. This measures "did the model say the right words".
+
+Both are reported everywhere; neither replaces the other, and `norm` does not make a model better
+— the audio and the hypotheses are untouched, only the ruler changes.
+
 ## Scope (frozen)
 
 | | |
@@ -129,7 +141,7 @@ inference (3.8× realtime); scoring and analysis take seconds. On a busy machine
 per-clip `runtime_s` recorded in the prediction files.
 
 ```bash
-uv sync                                   # creates .venv from uv.lock
+uv sync                                   # creates .venv from uv.lock (~6 GB with CUDA torch)
 uv run python scripts/fetch_fleurs.py     # -> data/audio/**, data/manifest.jsonl
 uv run python scripts/run_whisper.py      # -> outputs/predictions_whisper.jsonl
 uv run python scripts/run_qwen.py         # -> outputs/predictions_qwen.jsonl
@@ -137,6 +149,12 @@ uv run python scripts/score.py            # -> outputs/metrics_*.csv, per_sample
 uv run python scripts/analyze.py          # -> outputs/error_cases.csv, normalization_deltas.csv
 uv run python app/gradio_app.py           # http://127.0.0.1:7860  (CPU only)
 ```
+
+If `uv sync` fails while installing a wheel (`Invalid Wheel-Version ... WHEEL file: None`,
+`Failed to hardlink files`, or a timeout waiting for the uv cache lock), the shared uv cache is
+the problem, not this repo: run `uv sync --no-cache` once. That is also the answer when a
+long-lived `uvx`/`uv run` process on the same machine holds the cache lock, which makes
+`uv cache clean` hang for 300 s.
 
 No GPU? The committed `outputs/` directory contains every result file, so the app and the tables
 can be browsed without re-running inference. Audio playback still needs `data/audio/`, which is
@@ -205,11 +223,34 @@ openai-whisper version and the `large-v3` checkpoint name (its URL hash is the p
 
 ## Scoring
 
-- WER = (substitutions + deletions + insertions) / reference tokens, corpus-level.
-- CER = Levenshtein distance on space-free characters / reference characters.
-- Normalisation: NFKC, case folding, punctuation removal, number expansion (English), Devanagari
-  digit folding and zero-width-joiner removal (Hindi) — written up rule by rule in
-  `docs/normalization_rules.md`.
+**Metrics** (computed by `asrbench/scoring.py`, corpus-level = summed over the 50 clips, not an
+average of per-clip rates):
+
+- **WER** = (substitutions + deletions + insertions) / reference words. Words = whitespace tokens.
+- **CER** = the same on space-free character strings. For Hindi and Korean a single wrong suffix
+  or space moves a whole word in WER, so CER is reported alongside.
+
+**What `norm` actually does**
+
+| | pipeline (each step applied to reference *and* hypothesis) |
+|---|---|
+| all | strip zero-width characters (ZWJ/ZWNJ/ZWSP/BOM) |
+| **en** | brackets → commas (so the stock normaliser keeps their words) → openai-whisper `EnglishTextNormalizer`: lower-case, expand contractions/titles (`they're`→`they are`, `mr.`→`mister`), fold spelled-out numbers and currency (`five dollars`→`$5`), fold British→American spelling (`organisation`→`organization`), drop punctuation, collapse whitespace |
+| **hi** | NFKC → lower-case → symbols/punctuation → space (combining marks, i.e. matras, **kept**) → Devanagari digits `०–९` → ASCII → collapse whitespace |
+| **ko** | NFKC (full-width → ASCII) → lower-case → symbols/punctuation → space → collapse whitespace |
+
+Why these rules: openai-whisper's `BasicTextNormalizer` folds every Unicode mark into a space,
+which shreds Devanagari (`मोटरसाइकिल` → a string of bare consonants), so hi/ko use a cleaner that
+keeps marks. Punctuation is dropped in all three because FLEURS Korean ends sentences with `.`
+while models often omit it, and punctuation carries no lexical content for WER.
+
+**Deliberately *not* normalised** (each would hide a real difference, not a formatting one):
+transliteration, Devanagari spelling variants (nukta, chandrabindu, `हालाँकि` vs `हालांकि`),
+Korean eojeol spacing, Hangul↔Hanja, and English clock notation (`10:00` stays `10`+`0`, which is
+why case 1 in `docs/error_analysis.md` is charged to both models).
+
+Per-rule rationale, plus the measured "keep or delete bracketed text" experiment, is in
+[`docs/normalization_rules.md`](docs/normalization_rules.md).
 
 ## Known limits
 
