@@ -48,7 +48,7 @@ wheels = [
 ]
 
 [[package]]
-name = "asr-bench"
+name = "asr-norm-check"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

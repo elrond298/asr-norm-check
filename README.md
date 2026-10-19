@@ -1,4 +1,4 @@
-# asr-bench — Whisper vs Qwen3-ASR on a frozen FLEURS subset
+# asr-norm-check — Whisper vs Qwen3-ASR on a frozen FLEURS slice
 
 A small, reproducible multilingual automatic speech recognition (**ASR**) benchmark and
 error-analysis tool: 150 fixed clips of FLEURS (English / Hindi / Korean, 50 each), two models run

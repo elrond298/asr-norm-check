@@ -152,7 +152,7 @@ def view(label: str, variant: str):
 
 def build() -> gr.Blocks:
     choices = sorted(LABELS)
-    with gr.Blocks(title="ASR benchmark · FLEURS en/hi/ko") as demo:
+    with gr.Blocks(title="asr-norm-check · FLEURS en/hi/ko") as demo:
         gr.Markdown(
             "# Whisper vs Qwen3-ASR on FLEURS\n"
             "50 clips each for English, Hindi, Korean. **WER** = word error rate, edits ÷ reference "

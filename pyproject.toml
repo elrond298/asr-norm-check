@@ -1,5 +1,5 @@
 [project]
-name = "asr-bench"
+name = "asr-norm-check"
 version = "0.1.0"
 description = "Reproducible multilingual ASR benchmark: Whisper vs Qwen3-ASR on FLEURS en/hi/ko"
 requires-python = ">=3.12,<3.13"
