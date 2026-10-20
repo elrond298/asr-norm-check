@@ -132,6 +132,28 @@ is the outlier with ~40% deletions, which is the eojeol spacing effect below.
 what the tables use) or deleted. Bars are corpus WER %; the counts under the axis are how many
 references per language contain brackets.*
 
+## What the numbers say
+
+The short version, with the arithmetic in [`docs/conclusions.md`](docs/conclusions.md):
+
+- **Nearly all of the normalisation effect is punctuation removal.** Re-scoring with one rule at a
+  time: punctuation is −5.8/−6.1 pp on English (of a −7.3/−7.2 total), −8.3/−7.6 on Hindi and
+  −2.5/−1.9 on Korean — and in Hindi/Korean the full pipeline matches the punctuation row to within
+  0.1 pp. Case, contractions, numbers and spelling each add 1.6–2.4 pp in English. Devanagari digit
+  folding, NFKC and lowercasing measured **0.0 pp** here; zero-width stripping is worth 0.08 pp once.
+  ![per-rule effect](docs/img/fig_rule_effect.png)
+- **Rules don't add up.** English single-rule drops sum to −12.7 pp but the joint effect is −7.3 pp,
+  because one error (`10:00` vs *10 to 11 p.m.*) is repaired by several rules at once.
+- **Rule quality is measurable, not a matter of taste:** apply to both sides, remove presentation
+  rather than content, fold symmetrically (or not at all), and report both bracket policies because
+  that one flips sign by language (Figure 5).
+- **Normalisation moves magnitude, not ranking:** gap −7.05 → −6.57 pp, while individual scores move
+  up to 8.3 pp. A bare ASR number therefore says as much about the ruler as about the system.
+- **WER/CER split tracks orthography:** WER ÷ CER is 2.05 (English), 2.75 (Hindi), 3.46 (Korean) —
+  the more spacing is lexical, the more WER inflates; report CER for those languages.
+- **Error type follows the writing system:** Hindi is 80–88% substitutions (misspelling),
+  Korean 40–42% deletions (eojeol merges), not acoustic failures.
+
 No uncertainty analysis was run (no bootstrap, no repeated decoding), so treat this as 150 point
 estimates, not as a ranking with error bars: the English gap of about 1 pp is well inside what
 sampling variation could produce at this size, while the Hindi gap is far larger than any
@@ -160,13 +182,13 @@ highlights insertions/deletions/substitutions at word level.
 
 ```
 asrbench/            normalisation + scoring library (imported by scripts and app)
-scripts/             fetch_fleurs.py, run_whisper.py, run_qwen.py, score.py, analyze.py
+scripts/             fetch_fleurs.py, run_whisper.py, run_qwen.py, score.py, analyze.py, ablate.py
 app/gradio_app.py    Gradio viewer over the precomputed outputs
 data/manifest.jsonl  frozen sample list (id, language, reference, audio path, sha256)
 data/manifest.meta.json  selection rule, dataset revision, counts, manifest hash
 outputs/             predictions_*.jsonl, metrics_*.csv, per_sample_scores.csv, error_cases.csv
 scripts/make_figures.py  renders docs/img/fig_*.png from the CSVs (nothing hand-drawn)
-docs/                normalization_rules.md, error_analysis.md, img/ (figures + app screenshots)
+docs/                normalization_rules.md, error_analysis.md, conclusions.md, img/
 tests/               assert-based self-checks (scoring edge cases, alignment gate)
 ```
 
@@ -189,6 +211,7 @@ uv run python scripts/run_whisper.py      # -> outputs/predictions_whisper.jsonl
 uv run python scripts/run_qwen.py         # -> outputs/predictions_qwen.jsonl
 uv run python scripts/score.py            # -> outputs/metrics_*.csv, per_sample_scores.csv
 uv run python scripts/analyze.py          # -> outputs/error_cases.csv, normalization_deltas.csv
+uv run python scripts/ablate.py           # -> outputs/ablation.csv (per-rule WER deltas)
 uv run python scripts/make_figures.py     # -> docs/img/fig_*.png (reads the CSVs only)
 uv run python app/gradio_app.py           # http://127.0.0.1:7860  (CPU only)
 ```
@@ -261,6 +284,7 @@ openai-whisper version and the `large-v3` checkpoint name (its URL hash is the p
 - `outputs/error_cases.csv` — per clip: raw/norm scores, dominant error type, changed tokens,
   reference and hypothesis.
 - `outputs/normalization_deltas.csv` — clips whose score moves most under normalisation.
+- `outputs/ablation.csv` — one rule at a time: corpus WER and Δ vs raw, per language and model.
 - `outputs/alignment_check.md` — proof that both models cover the same sample ids, same field
   schema, and that references match the frozen manifest.
 

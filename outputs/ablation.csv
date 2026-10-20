@@ -1,0 +1,39 @@
+language,model,rule,wer,delta_vs_raw
+en,whisper,raw,12.0362,0.0
+en,whisper,lowercase,10.4072,-1.629
+en,whisper,punctuation + symbols,6.2167,-5.8195
+en,whisper,contractions / titles,10.1802,-1.856
+en,whisper,number + currency wording,10.3074,-1.7288
+en,whisper,British -> American spelling,10.4072,-1.629
+en,whisper,full norm pipeline,4.7195,-7.3167
+en,qwen3-asr,raw,10.8597,0.0
+en,qwen3-asr,lowercase,8.6878,-2.1719
+en,qwen3-asr,punctuation + symbols,4.7957,-6.064
+en,qwen3-asr,contractions / titles,8.4685,-2.3913
+en,qwen3-asr,number + currency wording,8.5895,-2.2702
+en,qwen3-asr,British -> American spelling,8.5973,-2.2624
+en,qwen3-asr,full norm pipeline,3.6509,-7.2088
+hi,whisper,raw,32.3817,0.0
+hi,whisper,zero-width characters,32.3817,0.0
+hi,whisper,lowercase,32.3817,0.0
+hi,whisper,punctuation / symbols,24.0876,-8.2941
+hi,whisper,Devanagari digits -> ASCII,32.3817,0.0
+hi,whisper,full norm pipeline,24.0876,-8.2941
+hi,qwen3-asr,raw,18.8418,0.0
+hi,qwen3-asr,zero-width characters,18.7602,-0.0816
+hi,qwen3-asr,lowercase,18.8418,0.0
+hi,qwen3-asr,punctuation / symbols,11.2733,-7.5684
+hi,qwen3-asr,Devanagari digits -> ASCII,18.8418,0.0
+hi,qwen3-asr,full norm pipeline,11.1922,-7.6495
+ko,whisper,raw,19.2913,0.0
+ko,whisper,zero-width characters,19.2913,0.0
+ko,whisper,lowercase,19.2913,0.0
+ko,whisper,NFKC (full-width -> ASCII),19.2913,0.0
+ko,whisper,punctuation / symbols,16.7734,-2.518
+ko,whisper,full norm pipeline,16.7734,-2.518
+ko,qwen3-asr,raw,14.1732,0.0
+ko,qwen3-asr,zero-width characters,14.1732,0.0
+ko,qwen3-asr,lowercase,14.1732,0.0
+ko,qwen3-asr,NFKC (full-width -> ASCII),14.1732,0.0
+ko,qwen3-asr,punctuation / symbols,12.2919,-1.8813
+ko,qwen3-asr,full norm pipeline,12.2919,-1.8813

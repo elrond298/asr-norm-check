@@ -245,6 +245,9 @@ for it — a reminder that reference text, not model output, sets the ceiling.
 
 ## 5. Categories we deliberately did not add
 
+The regularities these cases add up to (what kind of rule helps, and which error types follow the
+writing system) are summarised in [`conclusions.md`](conclusions.md).
+
 - **Named entities / numbers / code-switching** were not turned into frequency tables. With 50
   clips per language the per-category counts are 0–8 (proper nouns) and 1–6 (digits), so a category
   rate would be noise dressed as a percentage. The case table covers the mechanisms instead.

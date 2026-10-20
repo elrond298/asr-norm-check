@@ -261,12 +261,51 @@ def fig_error_mix(metrics: pd.DataFrame) -> Path:
     return out
 
 
+def fig_rule_effect() -> Path:
+    """Per-rule ablation: how many WER points each single rule accounts for."""
+    ablation = pd.read_csv(OUT_DIR / "ablation.csv")
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.6), sharex=True)
+    for ax, lang in zip(axes, LANGS):
+        sub = ablation[(ablation["language"] == lang)
+                       & (~ablation["rule"].isin(["raw", "full norm pipeline"]))]
+        rules = list(dict.fromkeys(sub["rule"]))
+        y = range(len(rules))
+        h = 0.36
+        for i, model in enumerate(MODELS):
+            vals = [float(sub[(sub["rule"] == r) & (sub["model"] == model)]["delta_vs_raw"].iloc[0])
+                    for r in rules]
+            bars = ax.barh([k + (i - 0.5) * h for k in y], vals, h, color=COLOR[model],
+                           label=MODEL_LABEL[model])
+            for bar, value in zip(bars, vals):
+                ax.text(value / 2 if abs(value) > 1.2 else value - 0.15, bar.get_y() + bar.get_height() / 2,
+                        f"{value:+.1f}", va="center", fontsize=7,
+                        ha="center" if abs(value) > 1.2 else "right",
+                        color="white" if abs(value) > 1.2 else "#555")
+        ax.set_yticks(list(y), rules, fontsize=7.8)
+        ax.invert_yaxis()
+        ax.axvline(0, color="#888", linewidth=0.8)
+        ax.set_title(LANG_LABEL[lang], fontsize=10, loc="left")
+        ax.set_xlabel("ΔWER vs raw (pp)")
+        ax.grid(axis="x", color="#e8e8e8", linewidth=0.7)
+        ax.set_axisbelow(True)
+    fig.legend(*axes[0].get_legend_handles_labels(), frameon=False, fontsize=8.5,
+               loc="lower center", bbox_to_anchor=(0.5, -0.06), ncols=2)
+    fig.suptitle("Which single rule accounts for the drop: punctuation removal is most of it "
+                 "(0.0 = measured, no effect)", fontsize=10.5, x=0.01, ha="left", y=1.02)
+    fig.tight_layout()
+    out = FIG_DIR / "fig_rule_effect.png"
+    fig.savefig(out, bbox_inches="tight")
+    plt.close(fig)
+    return out
+
+
 def main() -> None:
     style()
     FIG_DIR.mkdir(parents=True, exist_ok=True)
     metrics, per = load()
     for path in (fig_wer_cer(metrics), fig_normalisation(metrics), fig_distribution(per),
-                 fig_error_mix(metrics), fig_bracket_policy()):
+                 fig_error_mix(metrics), fig_bracket_policy(),
+                 fig_rule_effect()):
         print(f"wrote {path.relative_to(ROOT)} ({path.stat().st_size // 1024} KB)")
 
 

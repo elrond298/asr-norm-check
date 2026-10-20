@@ -96,6 +96,15 @@ Pipeline: NFKC → strip zero-width characters → lower-case → replace symbol
   spacing is lexical (it changes word boundaries), so rewriting it would hide real errors;
   instead CER is reported on space-free characters, where spacing has no effect.
 
+## Which of these rules actually fires
+
+`scripts/ablate.py` re-scores the committed predictions with one rule at a time
+(`outputs/ablation.csv`, summarised in [`conclusions.md`](conclusions.md)). Result: punctuation and
+symbol removal carries essentially the whole effect in all three languages; English additionally
+gets 1.6–2.4 pp each from case, contractions, number wording and spelling; zero-width stripping,
+NFKC, lowercase and Devanagari digit folding measure **0.0 pp** on this subset. The last group stays
+in the pipeline as robustness for other data — but it is not part of the numbers reported here.
+
 ## Metric definitions
 
 - **WER** = (S + D + I) / N_ref, whitespace tokens, corpus-level (sum of errors / sum of
